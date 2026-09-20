@@ -16,20 +16,34 @@ int x = 431424, y = 598356, r = 427089, px = 247872, py = 799248, pr,
                    {614928, 399424, 615744, 428369}},
     score = 0;
 
+// Global variables to track the upcoming piece
+int next_p, next_r;
+
 #define ESC_KEY 27
 #define CELL_CHAR_WIDTH 3  // 1格=3字符(1.5倍放大)
 
 int pause_game(int start_y, int start_x);
 
-// extract a 2-bit number from a block entry
-int NUM(int x, int y) { return 3 & block[p][x] >> y; }
+// extract a 2-bit number from a specified block type entry
+int GET_BIT(int block_type, int rotation, int bit_shift) { 
+  return 3 & block[block_type][rotation] >> bit_shift; 
+}
 
-// create a new piece, don't remove old one (it has landed and should stick)
+// Keep legacy shorthand active without breaking name structures
+#define NUM(rotation, bit_shift) GET_BIT(p, rotation, bit_shift)
+
+// create a new piece, pulling from the previewed "next" item
 void new_piece() {
   y = py = 0;
-  p = rand() % 7;
-  r = pr = rand() % 4;
+  
+  // Current piece takes the values of the previous "next_piece"
+  p = next_p;
+  r = pr = next_r;
   x = px = rand() % (10 - NUM(r, 16));
+
+  // Generate the next piece ahead of time for the preview window
+  next_p = rand() % 7;
+  next_r = rand() % 4;
 }
 
 void draw_border(int start_y, int start_x) {
@@ -63,6 +77,46 @@ void draw_border(int start_y, int start_x) {
   }
 }
 
+// Render the preview UI window to the right side of the main grid
+void draw_preview(int start_y, int start_x) {
+  int preview_x = start_x + (10 * CELL_CHAR_WIDTH) + 4; // Shifted right past main border
+  
+  // Title text
+  move(start_y, preview_x);
+  printw("NEXT:");
+
+  // Draw small 4x4 preview subgrid box border
+  mvaddch(start_y + 1, preview_x - 1, ACS_ULCORNER);
+  mvaddch(start_y + 1, preview_x + 12, ACS_URCORNER);
+  mvaddch(start_y + 6, preview_x - 1, ACS_LLCORNER);
+  mvaddch(start_y + 6, preview_x + 12, ACS_LRCORNER);
+  for(int i = 0; i < 12; i++) {
+    mvaddch(start_y + 1, preview_x + i, ACS_HLINE);
+    mvaddch(start_y + 6, preview_x + i, ACS_HLINE);
+  }
+  for(int i = 0; i < 4; i++) {
+    mvaddch(start_y + 2 + i, preview_x - 1, ACS_VLINE);
+    mvaddch(start_y + 2 + i, preview_x + 12, ACS_VLINE);
+  }
+
+  // Clear inner preview box contents 
+  for (int i = 0; i < 4; i++) {
+    move(start_y + 2 + i, preview_x);
+    printw("            ");
+  }
+
+  // Draw the actual next tetris block into the preview slot
+  for (int i = 0; i < 8; i += 2) {
+    int block_y = GET_BIT(next_p, next_r, i * 2);
+    int block_x = GET_BIT(next_p, next_r, (i * 2) + 2);
+    
+    move(start_y + 2 + block_y, preview_x + (block_x * CELL_CHAR_WIDTH));
+    attron(262176 | (next_p + 1) << 8);
+    printw("   ");
+    attroff(262176 | (next_p + 1) << 8);
+  }
+}
+
 // draw the board and score
 void frame(int start_y, int start_x) {
   draw_border(start_y, start_x);
@@ -76,6 +130,9 @@ void frame(int start_y, int start_x) {
   }
   move(start_y + 31, start_x); //【改】score下移到30行棋盘下方
   printw("Score: %d", score);
+  
+  // Render our new preview panel side-by-side
+  draw_preview(start_y, start_x);
   refresh();
 }
 
@@ -231,6 +288,10 @@ int main() {
   for (int i = 1; i < 8; i++) {
     init_pair(i, i, 0);
   }
+  
+  // Seed the initial preview queue before picking the very first block
+  next_p = rand() % 7;
+  next_r = rand() % 4;
   new_piece();
 
   noecho();
