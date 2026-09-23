@@ -32,6 +32,14 @@ int GET_BIT(int block_type, int rotation, int bit_shift) {
 // Keep legacy shorthand active without breaking name structures
 #define NUM(rotation, bit_shift) GET_BIT(p, rotation, bit_shift)
 
+// Calculate dynamic tick threshold based on score (Faster speed = smaller threshold)
+int get_speed_threshold() {
+  int level = score / 100;
+  int speed_thresh = 30 - (level * 3); // Drops threshold by 3 frames per level
+  if (speed_thresh < 3) speed_thresh = 3; // Enforce speed cap (maximum fast speed)
+  return speed_thresh;
+}
+
 // create a new piece, pulling from the previewed "next" item
 void new_piece() {
   y = py = 0;
@@ -131,6 +139,10 @@ void frame(int start_y, int start_x) {
   move(start_y + 31, start_x); //【改】score下移到30行棋盘下方
   printw("Score: %d", score);
   
+  // Show Level and Speed values under score line
+  move(start_y + 32, start_x);
+  printw("Level: %d  (Speed: %d)", score / 100, get_speed_threshold());
+
   // Render our new preview panel side-by-side
   draw_preview(start_y, start_x);
   refresh();
@@ -160,9 +172,9 @@ void remove_line() {
       continue;
     }
     for (int i = row - 1; i > 0; i--) {
-      memcpy(&board[i + 1][0], &board[i][0], 40);
+      memcpy(&board[i + 1], &board[i], 40);
     }
-    memset(&board[0][0], 0, 10);
+    memset(&board, 0, 10);
     score++;
   }
 }
@@ -183,7 +195,7 @@ int check_hit(int x, int y, int r) {
 
 // slowly tick the piece y position down so the piece falls
 int do_tick() {
-  if (++tick > 30) {
+  if (++tick > get_speed_threshold()) {
     tick = 0;
     if (check_hit(x, y + 1, r)) {
       if (!y) {
